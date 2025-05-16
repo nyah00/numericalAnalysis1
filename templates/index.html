@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fixed-Point Iteration Solver</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            display: flex;
+            gap: 30px;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            max-width: 900px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .input-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .input-panel label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .input-panel input[type="text"],
+        .input-panel input[type="number"] {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            width: 100%;
+        }
+
+        .input-panel button {
+            background-color: #5cb85c;
+            color: white;
+            padding: 12px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+
+        .input-panel button:hover {
+            background-color: #4cae4c;
+        }
+
+        #g-suggestions {
+            margin-top: 15px;
+        }
+
+        #g-suggestions h3 {
+            margin-bottom: 10px;
+            color: #337ab7;
+        }
+
+        #g-suggestions button {
+            background-color: #f0ad4e;
+            color: white;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 5px;
+            margin-bottom: 5px;
+            transition: background-color 0.3s ease;
+        }
+
+        #g-suggestions button:hover {
+            background-color: #eea236;
+        }
+
+        .results-panel {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .results-panel h2 {
+            color: #337ab7;
+            margin-top: 0;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        #results {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        #results th,
+        #results td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+
+        #results th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+
+        #plot {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        h1 {
+            color: #337ab7;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Fixed-Point Iteration Calculator</h1>
+    <div class="container">
+        <div class="input-panel">
+            <label for="equation">f(x) = 0:</label>
+            <input type="text" id="equation" value="x**2 - 3*x + 1">
+            <button onclick="suggestG()">Suggest g(x) Forms</button>
+            <div id="g-suggestions"></div>
+            <label for="g_function">g(x):</label>
+            <input type="text" id="g_function" value="(x**2 + 1)/3">
+            <label for="x0">Initial guess (x₀):</label>
+            <input type="number" id="x0" value="1.0">
+            <label for="tolerance">Tolerance:</label>
+            <input type="number" id="tolerance" value="0.000001">
+            <label for="max_iter">Max iterations:</label>
+            <input type="number" id="max_iter" value="100">
+            <button onclick="solve()">Solve</button>
+        </div>
+        <div class="results-panel">
+            <h2>Results</h2>
+            <div class="table-container">
+                <table id="results">
+                    <thead>
+                        <tr>
+                            <th>Iteration</th>
+                            <th>x</th>
+                            <th>g(x)</th>
+                            <th>Error</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-body"></tbody>
+                </table>
+            </div>
+            <h2>Plot</h2>
+            <img id="plot" style="max-width: 100%;" alt="Iteration Plot">
+        </div>
+    </div>
+
+    <script>
+        async function suggestG() {
+            const equation = document.getElementById("equation").value;
+            const response = await fetch("/suggest_g", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ equation })
+            });
+            const data = await response.json();
+
+            const suggestionsDiv = document.getElementById("g-suggestions");
+            suggestionsDiv.innerHTML = "<h3>Suggested g(x) Forms:</h3>";
+            data.g_functions.forEach(g => {
+                const btn = document.createElement("button");
+                btn.textContent = `${g.name}: ${g.expression}`;
+                btn.onclick = () => {
+                    document.getElementById("g_function").value = g.expression;
+                };
+                suggestionsDiv.appendChild(btn);
+            });
+        }
+
+        async function solve() {
+            const equation = document.getElementById("equation").value;
+            const g_function = document.getElementById("g_function").value;
+            const x0 = document.getElementById("x0").value;
+            const tolerance = document.getElementById("tolerance").value;
+            const max_iter = document.getElementById("max_iter").value;
+
+            const response = await fetch("/solve", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    equation, g_function, x0, tolerance, max_iter
+                })
+            });
+
+            const data = await response.json();
+            if (data.status === "error") {
+                alert("Error: " + data.message);
+                return;
+            }
+
+            // Update table
+            const tbody = document.getElementById("results-body");
+            tbody.innerHTML = "";
+            data.iterations.forEach((iter, i) => {
+                const row = tbody.insertRow();
+                row.insertCell(0).textContent = iter;
+                row.insertCell(1).textContent = data.x_values[i].toFixed(8);
+                row.insertCell(2).textContent = data.g_values[i].toFixed(8);
+                row.insertCell(3).textContent = data.errors[i].toFixed(8);
+            });
+
+            // Update plot
+            document.getElementById("plot").src = `data:image/png;base64,${data.plot}`;
+        }
+    </script>
+</body>
+</html>
